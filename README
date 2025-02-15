@@ -1,0 +1,98 @@
+/*Duminica Ana-Maria 332CC
+    README APD Tema #1a Calculul paralel al unui index inversat
+            folosind paradigma Map-Reduce*/
+
+    Acest proiect implementeaza un program paralel utilizand Pthreads pentru 
+construirea unui index inversat pentru un set de fisiere de intrare. Programul 
+extrage toate cuvintele unice din fisierele de intrare si le asociaza cu 
+fisierele in care apar. Procesarea documentelor de intrare este realizata cu 
+modelul Map-Reduce.
+
+    Indexul inversat rezultat va contine o lista a tuturor cuvintelor unice din 
+fisierele de intrare, impreuna cu fisierele in care acestea apar. Indexul este 
+organizat alfabetic, iar pentru fiecare litera a alfabetului se creeaza un 
+fisier de iesire corespunzator. In fiecare fisier de iesire, cuvintele sunt 
+sortate descrescator dupa numarul de fisiere in care apar, iar apoi alfabetic 
+in caz de egalitate. 
+
+    In acest program sunt implementate doua tipuri principale de operatii, 
+paradigma Map-Reduce. Map - Extrage cuvintele unice si fisierele in care apar, 
+formandu-se astfel liste partiale si Reduce - Combina si agrega datele partiale, 
+generandu-se astfel rezultatele finale. Fisierele de iesire sunt pentru fiecare 
+litera a alfabetului si contin cuvintele si id-ul fisierelor in care apar.
+
+Functii folosite si descrierea lor 
+sanitaze_word - elimina caracterele non-alfabetice dintr-un cuvant
+to_lowercase - transforma toate literele dintr-un cuvant in litere mici
+compare_entries - compara numarul de fisiere in care apare un cuvant, daca 
+este egal, le sorteaza alfabetic
+
+mapper_function - aceasta este functia destinata pentru mappers, unde acestia 
+proceseaza fiecare fisier de intrare si creeaza liste partiale. Impartirea 
+fisierelor pentru fiecare mapper se produce in mod dinamic utilizand o 
+variabila accesibila pentru toate thread-urile numita current_file_index. 
+Atunci cand un mapper si-a terminat treaba si asteapta, verifica daca mai sunt 
+fisiere neprocesate si il ia pe urmatorul neprocesat. Sectiunea este protejata 
+cu un mutex pentru a nu lua doua thread-uri din greseala acelasi fisier. 
+Dupa ce mapper-ul a luat fisierul, va citi fiecare cuvant din acesta. Cuvantul 
+este procesat utilizandu-se functiile sanitize_word si to_lowercase. Dupa 
+aceasta, se verifica daca cuvantul exista sau nu in lista corespunzatoare 
+fisierului curent. Daca cuvantul nu exista, se adauga in lista cu id-ul 
+fisierului.
+
+reducer function - functie pentru reduceri, etapa de agregare. Reducerii vor 
+verifica fiecare lista neprocesata realizata de mappers. Fiecare cuvant este 
+plasat in matricea alfabetica pe baza literei initiale. Se verifica daca 
+cuvantul exista deja in lista agregata, daca exista, se adauga id-ul fisierului 
+curent in array-ul cu ids, daca nu exista, se adauga in matrice. Accesul la 
+fiecare rand al matricei alfabetice este protejat cu mutex-uri pentru fiecare 
+rand, adica pentru fiecare litera din alfabet.
+
+write_results_to_files - functie pentru reduceri, se scriu listele finale in 
+fisierele de iesire, cate unul pentru fiecare litera a alfabetului. Fiecare 
+reducer selecteaza o litera neprocesata din matricea alfabetica folosind 
+processed_letters. Alegerea literei neprocesate este protejata de un mutex, 
+pentru a nu se alege o lista de mai multe ori.
+Cuvintele din randul selectat sunt sortate descrescator dupa 
+numarul de fisiere, si apoi alfabetic in caz de egalitate. Cuvintele si lista 
+fisierelor sunt scrise in fisierul de iesire corespunzator literei.
+
+thread_function - functia principala pentru fiecare thread Mapper sau Reducer.
+Ambele thread-uri sunt pornite in acelasi timp. Mapperii apeleaza functia 
+mapper_function pentru procesarea fisierelor. Reducerii apeleaza 
+reducer_function pentru agregarea listelor partiale, iar apoi asteapta la 
+bariera pentru a termina toti si apeleaza write_results_to_files pentru a 
+genera fisierele de iesire. Maperii si Reducerii se sincronizeaza la o bariera 
+pentru a se asigura ca toti maperii isi termina treaba pana sa inceapa 
+reducerii.
+
+main 
+Se citeste fisierul de intrare care contine numarul de fisiere de processat si 
+numele acestor fisiere. Se creeaza listele pentru mapperi, listele alfabetice 
+pentru reduceri, mutex-urile si barierele. Mai apoi, sunt create thread-urile 
+si fiecare thread va avea structura ThreadData, ce contine toate informatiile 
+relevante pentru rezolvarea intregului program: 
+int thread_id - id-ul thread-ului curent, 
+int num_threads_mapper - numarul de thread-uri mapper, 
+int num_threads_reducer - numarul de thread-uri reducer, 
+int num_files - numarul total de fisiere de procesat, 
+char** files - lista fisierelor de intrare, 
+Entry** mappers_lists - liste partiale generate de mapperi, unde fiecare rand 
+reprezinta cuvintele dintr-un fisier
+int* mappers_lists_counts - numarul de cuvinte pentru fiecare fisier in listele 
+mapper
+pthread_mutex_t* mutex
+pthread_barrier_t* barrier
+int* current_file_index - index pentru distribuirea dinamica a fisierelor catre 
+mapperi
+Entry** alphabetical_list - stocheaza cuvintele grupate alfabetic
+int* alphabetical_list_counts - numarul de intrari pe fiecare rand al matricei 
+alfabetice
+int* processed_letters - array de flaguri care indica daca o litera a fost 
+procesata
+int* reducer_processed_flags - flaguri care indica daca o lista partiala a fost 
+procesata de reduceri.
+
+Entry este o structura de date formata din cuvantul ce se gaseste intr-un 
+fisier, array-ul cu id-urile fisierelor si numarul de fisiere unde se gaseste 
+cuvantul.
